@@ -1,0 +1,59 @@
+/* eslint-disable @next/next/no-document-import-in-page */
+/* eslint-disable react/display-name */
+import NextDocument, { Html, Head, Main, NextScript } from 'next/document';
+import createEmotionServer from '@emotion/server/create-instance';
+import createEmotionCache from '../src/createEmotionCache';
+import { ServerStyleSheet } from 'styled-components';
+export default class MyDocument extends NextDocument {
+    render() {
+        return (
+            <Html lang="en">
+                <Head>
+                    {/* PWA primary color */}
+                    <link
+                        rel="stylesheet"
+                        href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap"
+                    />
+                </Head>
+                <body className='bg-secondary dark:bg-primary'>
+                    <Main />
+                    <NextScript />
+                </body>
+            </Html>
+        );
+    }
+}
+
+MyDocument.getInitialProps = async (ctx) => {
+    const sheet = new ServerStyleSheet();
+    const originalRenderPage = ctx.renderPage;
+
+    const cache = createEmotionCache();
+    const { extractCriticalToChunks } = createEmotionServer(cache);
+
+    try {
+        ctx.renderPage = () =>
+            originalRenderPage({
+                enhanceApp: (App: any) => (props) => sheet.collectStyles(<App emotionCache={cache} {...props} />),
+            });
+
+        const initialProps = await NextDocument.getInitialProps(ctx);
+
+        const emotionStyles = extractCriticalToChunks(initialProps.html);
+        const emotionStyleTags = emotionStyles.styles.map((style) => (
+            <style
+                data-emotion={`${style.key} ${style.ids.join(' ')}`}
+                key={style.key}
+                dangerouslySetInnerHTML={{ __html: style.css }}
+            />
+        ));
+        return {
+            ...initialProps,
+            styles: [initialProps.styles,
+            sheet.getStyleElement(),
+            ...emotionStyleTags],
+        };
+    } finally {
+        sheet.seal();
+    }
+};
